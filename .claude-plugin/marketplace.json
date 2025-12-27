@@ -1,0 +1,24 @@
+{
+  "name": "browserbase-cloud",
+  "owner": {
+    "name": "Browserbase",
+    "email": "support@browserbase.com"
+  },
+  "metadata": {
+    "description": "Run Claude Code browser automation in Browserbase cloud browsers",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "browserbase",
+      "source": "./",
+      "description": "Use Browserbase cloud browsers with Claude Code instead of local Chrome. Provides sandboxed, secure browser execution with session recording and debugging.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Browserbase"
+      },
+      "category": "automation",
+      "keywords": ["browser", "cloud", "browserbase", "automation", "sandboxed"]
+    }
+  ]
+}

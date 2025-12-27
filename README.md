@@ -25,8 +25,10 @@ In Claude Code, add the plugin marketplace and install:
 
 ```
 /plugin marketplace add browserbase/claude-code-plugin
-/plugin install browserbase
+/plugin install browserbase@browserbase-cloud
 ```
+
+Then restart Claude Code for the changes to take effect.
 
 ### Manual Installation
 
