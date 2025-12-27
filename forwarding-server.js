@@ -241,10 +241,24 @@ class ForwardingServer {
         const [data, width, height] = await this.client.screenshot(tabId);
         const tabsText = await getTabContext();
 
+        // Get viewport dimensions for coordinate reference
+        let viewportInfo = '';
+        try {
+          const viewportResult = await this.client.executeScript(tabId,
+            'JSON.stringify({w:window.innerWidth,h:window.innerHeight})'
+          );
+          if (viewportResult) {
+            const vp = JSON.parse(viewportResult);
+            viewportInfo = `\nViewport: ${vp.w}x${vp.h} (use these dimensions for click coordinates)`;
+          }
+        } catch (e) {
+          // Ignore viewport fetch errors
+        }
+
         return {
           result: {
             content: [
-              { type: 'text', text: `Successfully captured screenshot (${width}x${height}, jpeg)` },
+              { type: 'text', text: `Successfully captured screenshot (${width}x${height}, jpeg)${viewportInfo}` },
               { type: 'text', text: tabsText },
               {
                 type: 'image',
@@ -537,6 +551,7 @@ class ForwardingServer {
   async handleReadPage(args) {
     const tabId = args.tabId;
     const depth = args.depth || 15;
+    const filter = args.filter; // 'interactive' or 'all'
 
     if (!tabId) {
       return { error: { message: 'tabId required' } };
@@ -549,16 +564,58 @@ class ForwardingServer {
     if (typeof tree.nodes === 'string') {
       treeText = `Accessibility tree:\n${tree.nodes}`;
     } else {
-      // Handle if it returns an object/array
+      // Handle CDP's AXTree format - it returns a flat array with nodeId/parentId relationships
       const nodes = tree.nodes || [];
       if (Array.isArray(nodes) && nodes.length > 0) {
-        treeText = `Accessibility tree (${nodes.length} nodes):\n`;
-        for (const node of nodes.slice(0, 50)) {
+        // Build a map of nodeId -> node for hierarchy
+        const nodeMap = new Map();
+        for (const node of nodes) {
+          nodeMap.set(node.nodeId, node);
+        }
+
+        // Interactive roles to filter for
+        const interactiveRoles = new Set([
+          'button', 'link', 'textbox', 'checkbox', 'radio', 'combobox',
+          'listbox', 'menu', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
+          'option', 'searchbox', 'slider', 'spinbutton', 'switch', 'tab',
+          'treeitem', 'gridcell', 'row', 'columnheader', 'rowheader'
+        ]);
+
+        // Filter and format nodes
+        const filteredNodes = [];
+        let refCounter = 1;
+
+        for (const node of nodes) {
           const role = node.role?.value || '';
           const name = node.name?.value || '';
-          if (role || name) {
-            treeText += `  ${role}: ${name}\n`;
+          const value = node.value?.value || '';
+
+          // Skip ignored nodes and empty generic/none nodes
+          if (node.ignored) continue;
+          if ((role === 'none' || role === 'generic') && !name) continue;
+
+          // If filter is 'interactive', only show interactive elements
+          if (filter === 'interactive' && !interactiveRoles.has(role.toLowerCase())) {
+            continue;
           }
+
+          // Only include nodes with meaningful content
+          if (role || name || value) {
+            const ref = `ref_${refCounter++}`;
+            let nodeText = `  ${ref} ${role}`;
+            if (name) nodeText += `: ${name}`;
+            if (value) nodeText += ` [value: ${value}]`;
+            filteredNodes.push(nodeText);
+          }
+        }
+
+        treeText = `Accessibility tree (${filteredNodes.length} nodes):\n`;
+        // Show more nodes (up to 200)
+        for (const nodeText of filteredNodes.slice(0, 200)) {
+          treeText += `${nodeText}\n`;
+        }
+        if (filteredNodes.length > 200) {
+          treeText += `  ... and ${filteredNodes.length - 200} more nodes\n`;
         }
       } else {
         treeText = `Accessibility tree:\n${JSON.stringify(nodes, null, 2)}`;
@@ -580,49 +637,94 @@ class ForwardingServer {
       return { error: { message: 'tabId and query required' } };
     }
 
-    // Use accessibility tree to find elements
-    const tree = await this.client.getAccessibilityTree(tabId);
-    const nodes = tree.nodes || [];
+    // Use JavaScript to find elements with coordinates
+    const script = `
+      (function() {
+        const query = ${JSON.stringify(query.toLowerCase())};
+        const results = [];
 
-    const matches = [];
-    const queryLower = query.toLowerCase();
+        // Find by text content, aria-label, placeholder, title, name, id
+        const allElements = document.querySelectorAll('a, button, input, select, textarea, [role="button"], [role="link"], [role="textbox"], [role="combobox"], [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"], [onclick], [tabindex]');
 
-    // Handle string snapshot (Playwright's ariaSnapshot returns a string)
-    if (typeof nodes === 'string') {
-      const lines = nodes.split('\n');
-      for (const line of lines) {
-        if (line.toLowerCase().includes(queryLower)) {
-          matches.push(line.trim());
+        for (const el of allElements) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+          const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+          const title = (el.getAttribute('title') || '').toLowerCase();
+          const name = (el.getAttribute('name') || '').toLowerCase();
+          const id = (el.id || '').toLowerCase();
+          const role = (el.getAttribute('role') || el.tagName.toLowerCase());
+
+          if (text.includes(query) || ariaLabel.includes(query) || placeholder.includes(query) ||
+              title.includes(query) || name.includes(query) || id.includes(query)) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              results.push({
+                tag: el.tagName.toLowerCase(),
+                role: role,
+                text: (el.textContent || '').trim().substring(0, 50),
+                ariaLabel: el.getAttribute('aria-label'),
+                placeholder: el.getAttribute('placeholder'),
+                x: Math.round(rect.x + rect.width / 2),
+                y: Math.round(rect.y + rect.height / 2),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+              });
+            }
+          }
+          if (results.length >= 20) break;
+        }
+        return results;
+      })()
+    `;
+
+    try {
+      const matches = await this.client.executeScript(tabId, script) || [];
+
+      let resultText = `Found ${matches.length} matches for '${query}':\n`;
+      for (let i = 0; i < matches.length; i++) {
+        const m = matches[i];
+        const label = m.ariaLabel || m.placeholder || m.text || m.tag;
+        resultText += `  ${i + 1}. [${m.role}] "${label}" - click at (${m.x}, ${m.y})\n`;
+      }
+
+      if (matches.length === 0) {
+        resultText = `No matches found for '${query}'. Try a different search term.`;
+      }
+
+      return {
+        result: {
+          content: [{ type: 'text', text: resultText }],
+        },
+      };
+    } catch (err) {
+      // Fallback to accessibility tree if JS fails
+      const tree = await this.client.getAccessibilityTree(tabId);
+      const nodes = tree.nodes || [];
+      const matches = [];
+      const queryLower = query.toLowerCase();
+
+      if (Array.isArray(nodes)) {
+        for (const node of nodes) {
+          const name = node.name?.value || '';
+          const role = node.role?.value || '';
+          if (name.toLowerCase().includes(queryLower) || role.toLowerCase().includes(queryLower)) {
+            matches.push({ role, name });
+          }
         }
       }
-    } else if (Array.isArray(nodes)) {
-      for (const node of nodes) {
-        const name = node.name?.value || '';
-        const role = node.role?.value || '';
-        if (name.toLowerCase().includes(queryLower) || role.toLowerCase().includes(queryLower)) {
-          matches.push({
-            role,
-            name,
-            nodeId: node.nodeId,
-          });
-        }
-      }
-    }
 
-    let resultText = `Found ${matches.length} matches for '${query}':\n`;
-    for (const match of matches.slice(0, 20)) {
-      if (typeof match === 'string') {
-        resultText += `  - ${match}\n`;
-      } else {
+      let resultText = `Found ${matches.length} matches for '${query}':\n`;
+      for (const match of matches.slice(0, 20)) {
         resultText += `  - ${match.role}: ${match.name}\n`;
       }
-    }
 
-    return {
-      result: {
-        content: [{ type: 'text', text: resultText }],
-      },
-    };
+      return {
+        result: {
+          content: [{ type: 'text', text: resultText }],
+        },
+      };
+    }
   }
 
   async handleGetPageText(args) {
@@ -877,8 +979,26 @@ class ForwardingServer {
       return { error: { message: 'tabId required' } };
     }
 
-    // Get requests from the client's storage
-    const requests = this.client.networkRequests?.get(tabId) || [];
+    // Get requests from the page's injected tracking script
+    let requests = [];
+    try {
+      requests = await this.client.executeScript(tabId, `
+        (function() {
+          const requests = window.__networkRequests || [];
+          if (${clear}) {
+            window.__networkRequests = [];
+          }
+          return requests;
+        })()
+      `) || [];
+    } catch {
+      // Fall back to client storage if page script fails
+      requests = this.client.networkRequests?.get(tabId) || [];
+      if (clear && this.client.networkRequests) {
+        this.client.networkRequests.set(tabId, []);
+      }
+    }
+
     let filtered = requests;
 
     // Filter by URL pattern
@@ -888,11 +1008,6 @@ class ForwardingServer {
 
     // Apply limit
     filtered = filtered.slice(-limit);
-
-    // Clear if requested
-    if (clear && this.client.networkRequests) {
-      this.client.networkRequests.set(tabId, []);
-    }
 
     let resultText = `Network requests (${filtered.length}):\n`;
     for (const req of filtered) {
