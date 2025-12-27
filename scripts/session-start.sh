@@ -22,6 +22,13 @@ mkdir -p "$STATE_DIR"
 # Debug: Log that hook was called
 echo "[$(date)] SessionStart hook called" >> "$DEBUG_LOG"
 
+# Install dependencies if not already installed
+if [ ! -d "$PLUGIN_DIR/node_modules/@browserbasehq" ]; then
+    echo "[$(date)] Installing dependencies..." >> "$DEBUG_LOG"
+    (cd "$PLUGIN_DIR" && npm install --silent 2>&1) >> "$DEBUG_LOG"
+    echo "[$(date)] Dependencies installed" >> "$DEBUG_LOG"
+fi
+
 # Helper function to output JSON result
 output_json() {
     local context="$1"
