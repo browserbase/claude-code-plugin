@@ -6,6 +6,7 @@
 # Use CLAUDE_PLUGIN_ROOT if available, otherwise compute from script location
 if [ -n "$CLAUDE_PLUGIN_ROOT" ]; then
     PLUGIN_DIR="$CLAUDE_PLUGIN_ROOT"
+    SCRIPT_DIR="$PLUGIN_DIR/scripts"
 else
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PLUGIN_DIR="$(dirname "$SCRIPT_DIR")"
