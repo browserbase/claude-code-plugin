@@ -82,12 +82,12 @@ extension_found=false
 
 if [ -d "$CHROME_DIR" ]; then
     # Check all Chrome profiles for the extension
-    for profile_dir in "$CHROME_DIR"/*/Extensions/"$EXTENSION_ID" 2>/dev/null; do
+    while IFS= read -r profile_dir; do
         if [ -d "$profile_dir" ]; then
             extension_found=true
             break
         fi
-    done
+    done < <(find "$CHROME_DIR" -path "*/Extensions/$EXTENSION_ID" -type d 2>/dev/null)
 fi
 
 if [ "$extension_found" = false ]; then

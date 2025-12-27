@@ -1,5 +1,5 @@
-# Dependencies
-node_modules/
+# Dependencies are committed for plugin compatibility
+# node_modules/
 
 # State files (created at runtime)
 *.pid
