@@ -6,7 +6,7 @@ Use [Browserbase](https://browserbase.com) cloud browsers with Claude Code inste
 
 This plugin intercepts Claude Code's browser automation commands (`mcp__claude-in-chrome__*`) and forwards them to Browserbase's cloud browser infrastructure. This gives you:
 
-- **Headless cloud browser execution** - No need to have Chrome open locally
+- **Sandboxed, secure browser execution** - Run browser automation in isolated cloud environments
 - **Session recording and debugging** - Watch Claude browse in real-time via debug URLs
 - **Scalable browser automation** - Cloud browsers with built-in proxy and stealth capabilities
 
@@ -21,16 +21,11 @@ This plugin intercepts Claude Code's browser automation commands (`mcp__claude-i
 
 ### From Browserbase Marketplace
 
-First, add the Browserbase plugin marketplace to Claude Code:
+In Claude Code, add the plugin marketplace and install:
 
-```bash
-claude marketplace add https://marketplace.browserbase.com/plugins
 ```
-
-Then install the plugin:
-
-```bash
-claude plugin install browserbase
+/plugin marketplace add browserbase/claude-code-plugin
+/plugin install browserbase
 ```
 
 ### Manual Installation
