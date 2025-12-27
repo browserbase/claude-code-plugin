@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# State files (created at runtime)
+*.pid
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

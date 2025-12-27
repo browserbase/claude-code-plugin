@@ -1,0 +1,19 @@
+{
+  "name": "mcp-browser-bridge",
+  "version": "1.0.0",
+  "description": "MCP Browser Bridge Forwarding Server for Browserbase",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test tests/*.test.js",
+    "test:watch": "node --test --watch tests/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage tests/*.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

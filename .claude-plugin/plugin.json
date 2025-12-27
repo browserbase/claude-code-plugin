@@ -1,0 +1,8 @@
+{
+  "name": "browserbase",
+  "description": "Use Browserbase cloud browsers with Claude Code instead of local Chrome",
+  "version": "1.0.0",
+  "author": {
+    "name": "Browserbase"
+  }
+}
