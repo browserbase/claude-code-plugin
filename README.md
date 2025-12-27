@@ -19,7 +19,15 @@ This plugin intercepts Claude Code's browser automation commands (`mcp__claude-i
 
 ## Installation
 
-### From Claude Marketplace (Recommended)
+### From Browserbase Marketplace
+
+First, add the Browserbase plugin marketplace to Claude Code:
+
+```bash
+claude marketplace add https://marketplace.browserbase.com/plugins
+```
+
+Then install the plugin:
 
 ```bash
 claude plugin install browserbase
